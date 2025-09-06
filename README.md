@@ -27,7 +27,7 @@
 1. リポジトリをクローン:
 ```bash
 git clone <repository-url>
-cd BATTLE_TOWN
+cd BATTLE_TANK
 ```
 
 2. 仮想環境を作成・アクティベート:
@@ -134,7 +134,7 @@ python main.py
 ### プロジェクト構造
 
 ```
-BATTLE_TOWN/
+BATTLE_TANK/
 ├── main.py              # ゲームエントリーポイント
 ├── game_manager.py      # ゲーム全体の制御とステートマシン
 ├── player.py           # プレイヤー戦車ロジック（日本語コメント）
