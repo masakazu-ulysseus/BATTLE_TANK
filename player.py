@@ -96,9 +96,11 @@ class Player:
         self.force_grid_alignment()
         
         # 入力状態に基づいた現実的なタンクエンジン音処理
-        # スムーズ移動中でも、移動キーが押されている間はエンジン音が鳴る
-        key_pressed = (pyxel.btn(KEY_UP) or pyxel.btn(KEY_DOWN) or 
-                      pyxel.btn(KEY_LEFT) or pyxel.btn(KEY_RIGHT))
+        # スムーズ移動中でも、移動キーまたはゲームパッドが押されている間はエンジン音が鳴る
+        key_pressed = (pyxel.btn(KEY_UP) or pyxel.btn(KEY_DOWN) or
+                      pyxel.btn(KEY_LEFT) or pyxel.btn(KEY_RIGHT) or
+                      pyxel.btn(GAMEPAD_UP) or pyxel.btn(GAMEPAD_DOWN) or
+                      pyxel.btn(GAMEPAD_LEFT) or pyxel.btn(GAMEPAD_RIGHT))
         
         if key_pressed:
             # 初回実行時にサウンドタイマーを初期化
@@ -145,32 +147,32 @@ class Player:
         """
         moved = False  # このフレームで移動が開始されたかを追跡
         
-        # 方向移動入力を処理
+        # 方向移動入力を処理（キーボードまたはゲームパッド）
         # 各方向で向きを更新し、移動を試行
-        if pyxel.btn(KEY_UP):
+        if pyxel.btn(KEY_UP) or pyxel.btn(GAMEPAD_UP):
             self.direction = UP  # 常に向きを更新
             if self.can_move(0, -TILE_SIZE, map_manager):  # 上方向移動が有効かチェック
                 self.start_move(0, -TILE_SIZE)  # 上方向へのスムーズ移動を開始
                 moved = True
-        elif pyxel.btn(KEY_DOWN):
+        elif pyxel.btn(KEY_DOWN) or pyxel.btn(GAMEPAD_DOWN):
             self.direction = DOWN
             if self.can_move(0, TILE_SIZE, map_manager):  # 下方向移動をチェック
                 self.start_move(0, TILE_SIZE)
                 moved = True
-        elif pyxel.btn(KEY_LEFT):
+        elif pyxel.btn(KEY_LEFT) or pyxel.btn(GAMEPAD_LEFT):
             self.direction = LEFT
             if self.can_move(-TILE_SIZE, 0, map_manager):  # 左方向移動をチェック
                 self.start_move(-TILE_SIZE, 0)
                 moved = True
-        elif pyxel.btn(KEY_RIGHT):
+        elif pyxel.btn(KEY_RIGHT) or pyxel.btn(GAMEPAD_RIGHT):
             self.direction = RIGHT
             if self.can_move(TILE_SIZE, 0, map_manager):  # 右方向移動をチェック
                 self.start_move(TILE_SIZE, 0)
                 moved = True
         
         # 発射入力を処理（ボタン押下、長押しではない）
-        # 発射音と弾丸作成はゲームマネージャーが処理
-        if pyxel.btnp(KEY_FIRE):
+        # 発射音と弾丸作成はゲームマネージャーが処理（キーボードまたはゲームパッド）
+        if pyxel.btnp(KEY_FIRE) or pyxel.btnp(GAMEPAD_FIRE):
             pyxel.play(0, 1)  # 発射音効果を直接再生
             # 注意: 実際の弾丸作成は game_manager.update_player() で発生
     
