@@ -84,7 +84,8 @@ class Bullet:
         direction: Direction,
         speed: int,
         owner_type: TankType,
-        power_level: PowerLevel = POWER_NORMAL
+        power_level: PowerLevel = POWER_NORMAL,
+        owner_id: Optional[int] = None
     ) -> None:
         """
         新しい弾丸発射体を初期化。
@@ -99,6 +100,7 @@ class Bullet:
             speed: フレーム毎の移動速度（ピクセル単位）
             owner_type: 弾丸を発射したタンクタイプ
             power_level: 破壊能力レベル（デフォルト: POWER_NORMAL）
+            owner_id: 発射した個体の識別子（敵の個体別弾数制限に使用、省略可）
 
         注記:
             速度成分は初期化時に計算され、毎フレームの計算コストを削減
@@ -110,6 +112,7 @@ class Bullet:
         self.speed: int = speed
         self.owner_type: TankType = owner_type
         self.power_level: PowerLevel = power_level
+        self.owner_id: Optional[int] = owner_id
         self.active: bool = True
 
         # 方向ベクトルを使用した速度成分の効率的な計算

@@ -67,7 +67,8 @@ class Enemy:
         item_type (Optional[int]): 保持しているアイテムタイプ
     """
 
-    def __init__(self, x: int, y: int, enemy_type: int) -> None:
+    def __init__(self, x: int, y: int, enemy_type: int,
+                 carries_item: bool = False) -> None:
         """
         敵タンクを初期化する。
 
@@ -75,6 +76,7 @@ class Enemy:
             x (int): 初期Xピクセル座標
             y (int): 初期Yピクセル座標
             enemy_type (int): 敵タンクタイプ定数
+            carries_item (bool): アイテムキャリアかどうか（赤点滅し、撃破時にアイテムをドロップ）
         """
         # 基本位置と状態
         self.x: float = float(x)
@@ -97,10 +99,14 @@ class Enemy:
             AI_DIRECTION_CHANGE_MIN, AI_DIRECTION_CHANGE_MAX
         )
 
-        # アイテムシステム（25%の確率でアイテムを保持）
-        self.carries_item: bool = False
+        # アイテムシステム（本家準拠: 出現順で指定されたキャリアのみ保持）
+        self.carries_item: bool = carries_item
         self.item_type: Optional[int] = None
-        self._initialize_item_carrier()
+        if carries_item:
+            self.item_type = random.choice([
+                ITEM_STAR, ITEM_GRENADE, ITEM_TANK,
+                ITEM_SHOVEL, ITEM_CLOCK, ITEM_HELMET
+            ])
 
     def _get_max_health(self) -> int:
         """
@@ -128,21 +134,6 @@ class Enemy:
             int: 発射間隔フレーム数
         """
         return ENEMY_FIRE_RATE.get(self.enemy_type, 90)
-
-    def _initialize_item_carrier(self) -> None:
-        """
-        アイテムキャリア設定を初期化する。
-
-        25%の確率でランダムなアイテムを保持する敵として設定。
-        """
-        if random.random() < ITEM_CARRIER_PROBABILITY:
-            self.carries_item = True
-            # 全アイテムタイプからランダム選択
-            available_items = [
-                ITEM_STAR, ITEM_GRENADE, ITEM_TANK,
-                ITEM_SHOVEL, ITEM_CLOCK, ITEM_HELMET
-            ]
-            self.item_type = random.choice(available_items)
 
     def update(self, map_manager: 'MapManager', player: 'Player',
                bullet_manager: 'BulletManager') -> None:
@@ -174,7 +165,7 @@ class Enemy:
         # 移動処理：スムーズ移動中か新しいAI判定
         if self.move_timer > 0:
             self.move_timer -= 1
-            self._smooth_move()
+            self._smooth_move(map_manager)
         else:
             self._update_ai(map_manager, player, bullet_manager)
 
@@ -322,11 +313,15 @@ class Enemy:
         self.move_timer = MOVE_ANIMATION_FRAMES
         self.is_moving = True
 
-    def _smooth_move(self) -> None:
+    def _smooth_move(self, map_manager: 'MapManager') -> None:
         """
         目標位置へのスムーズ移動を1フレーム実行する。
 
         境界チェック付きで安全な移動を保証。
+        移動完了時に氷タイル上であれば同方向への滑り移動を継続する。
+
+        Args:
+            map_manager (MapManager): 氷タイル判定・滑り移動の衝突検出用
         """
         if self.move_timer <= 0:
             # 移動完了：目標位置が有効な場合のみ設定
@@ -334,6 +329,8 @@ class Enemy:
                 self.x = float(self.target_x)
                 self.y = float(self.target_y)
             self.is_moving = False
+            # 氷タイル上なら同方向へ滑り続ける（本家バトルシティー準拠）
+            self._check_ice_slide(map_manager)
             return
 
         # 線形補間による移動
@@ -356,6 +353,26 @@ class Enemy:
         """
         return (0 <= x < SCREEN_WIDTH - TILE_SIZE and
                 0 <= y < MAP_HEIGHT * TILE_SIZE - TILE_SIZE)
+
+    def _check_ice_slide(self, map_manager: 'MapManager') -> None:
+        """
+        氷タイル上での滑り移動を判定・開始する。
+
+        タンク中心が氷タイル上にあり、かつ進行方向に移動可能な場合、
+        AI判定を待たずに同方向への移動を自動的に継続する。
+
+        Args:
+            map_manager (MapManager): タイル参照と衝突検出用
+        """
+        center_grid_x, center_grid_y = map_manager.pixel_to_grid(
+            self.x + TILE_SIZE // 2, self.y + TILE_SIZE // 2
+        )
+        if map_manager.get_tile(center_grid_x, center_grid_y) != TILE_ICE:
+            return
+
+        if self._can_move_forward(map_manager):
+            dx, dy = self._get_direction_vector()
+            self._start_move(dx * TILE_SIZE, dy * TILE_SIZE)
 
     def _can_move(self, dx: int, dy: int, map_manager: 'MapManager') -> bool:
         """
@@ -424,9 +441,12 @@ class Enemy:
         if self.fire_timer < self._get_fire_rate():
             return
 
-        # 既存弾丸数制限チェック
-        existing_bullets = bullet_manager.get_bullets_by_owner(self.enemy_type)
-        if len(existing_bullets) >= 1:
+        # 既存弾丸数制限チェック（個体単位: 各敵は同時に1発まで）
+        own_bullets = [
+            b for b in bullet_manager.bullets
+            if b.active and b.owner_id == id(self)
+        ]
+        if len(own_bullets) >= 1:
             return
 
         # 攻撃方向と発射確率の判定
@@ -575,7 +595,8 @@ class Enemy:
 
         return Bullet(
             bullet_x, bullet_y, self.direction,
-            bullet_speed, self.enemy_type
+            bullet_speed, self.enemy_type,
+            owner_id=id(self)
         )
 
     def take_damage(self) -> bool:
@@ -632,7 +653,11 @@ class Enemy:
             self._draw_fallback()
 
     def _draw_sprite(self) -> None:
-        """スプライトベースの描画を実行する。"""
+        """スプライトベースの描画を実行する。
+
+        アイテムキャリア敵は本家準拠で赤く点滅させる
+        （一定周期でスプライトの全色を赤にパレットスワップ）。
+        """
         sprite_coords = self._get_sprite_coordinates()
 
         if sprite_coords:
@@ -641,8 +666,20 @@ class Enemy:
 
             # 画面境界内の場合のみ描画
             if self._is_sprite_visible(draw_x, draw_y):
+                flash_red = (
+                    self.carries_item and
+                    (pyxel.frame_count // ITEM_CARRIER_FLASH_INTERVAL) % 2 == 0
+                )
+                if flash_red:
+                    # 黒（透明色）以外の全色を赤に置き換えて点滅させる
+                    for color in range(1, 16):
+                        pyxel.pal(color, COLOR_RED)
+
                 pyxel.blt(draw_x, draw_y, 0, sprite_x, sprite_y,
                          SPRITE_SIZE, SPRITE_SIZE, COLOR_BLACK)
+
+                if flash_red:
+                    pyxel.pal()  # パレットを元に戻す
 
     def _get_sprite_coordinates(self) -> Optional[Tuple[int, int]]:
         """
@@ -726,6 +763,9 @@ class EnemyManager:
         self.enemies_destroyed: int = 0
         self.enemies_to_spawn: int = ENEMIES_PER_STAGE
 
+        # ステージ内のタイプ別撃破数（ステージクリア集計画面用）
+        self.destroyed_by_type: dict[int, int] = {}
+
         # 霧エフェクト制御システム
         self.spawn_fog_active: bool = False
         self.spawn_fog_timer: int = 0
@@ -748,6 +788,7 @@ class EnemyManager:
         self.enemies_destroyed = 0
         self.enemies_to_spawn = ENEMIES_PER_STAGE
         self.spawn_timer = 0
+        self.destroyed_by_type = {}
 
         # 霧エフェクト状態のリセット
         self._reset_spawn_fog()
@@ -812,14 +853,26 @@ class EnemyManager:
         # 新しい敵の出現処理
         self._update_spawning()
 
-    def _cleanup_inactive_enemies(self) -> None:
-        """非活性化された敵をリストから削除する。"""
-        # 破壊された敵の数をカウント
-        inactive_count = len([e for e in self.enemies if not e.active])
-        self.enemies_destroyed += inactive_count
+    def cleanup_inactive_enemies(self) -> None:
+        """
+        非活性化された敵をリストから削除する（公開メソッド）。
+
+        撃破数の集計（合計・タイプ別）もここで行う。
+        衝突処理直後の即時清掃のため game_manager からも呼び出される。
+        """
+        for enemy in self.enemies:
+            if not enemy.active:
+                self.enemies_destroyed += 1
+                self.destroyed_by_type[enemy.enemy_type] = (
+                    self.destroyed_by_type.get(enemy.enemy_type, 0) + 1
+                )
 
         # 活性敵のみを保持
         self.enemies = [enemy for enemy in self.enemies if enemy.active]
+
+    def _cleanup_inactive_enemies(self) -> None:
+        """非活性化された敵をリストから削除する（内部呼び出し用エイリアス）。"""
+        self.cleanup_inactive_enemies()
 
     def _update_spawning(self) -> None:
         """敵出現システムを更新する。"""
@@ -918,11 +971,16 @@ class EnemyManager:
             self._reset_spawn_fog()
             return
 
+        # アイテムキャリア判定（本家準拠: 4・11・18番目に出現する敵が保持）
+        spawn_order = self.enemies_spawned + 1  # 1始まりの出現順
+        carries_item = spawn_order in ITEM_CARRIER_SPAWN_ORDER
+
         # 敵を生成して追加
         enemy = Enemy(
             self.spawn_fog_position[0],
             self.spawn_fog_position[1],
-            self.pending_enemy_type
+            self.pending_enemy_type,
+            carries_item=carries_item
         )
         self.enemies.append(enemy)
         self.enemies_spawned += 1
@@ -954,6 +1012,15 @@ class EnemyManager:
             int: 撃破済み敵数
         """
         return self.enemies_destroyed
+
+    def get_unspawned_count(self) -> int:
+        """
+        未出現の敵数を取得する（本家のサイドバー残敵表示に相当）。
+
+        Returns:
+            int: まだ出現していない敵の数
+        """
+        return max(0, self.enemies_to_spawn - self.enemies_spawned)
 
     def is_stage_complete(self) -> bool:
         """

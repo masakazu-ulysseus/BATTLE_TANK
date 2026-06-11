@@ -48,8 +48,8 @@ UI_HEIGHT: Final[int] = 16       # 画面下部のUI表示エリア高さ
 # =============================================================================
 
 # ステージ進行パラメータ
-TOTAL_STAGES: Final[int] = 16                    # ゲーム内の最大ステージ数
-ENEMIES_PER_STAGE: Final[int] = 10              # ステージあたりの敵出現数（リリース用バランス）
+TOTAL_STAGES: Final[int] = 35                    # ゲーム内の最大ステージ数（本家バトルシティー準拠）
+ENEMIES_PER_STAGE: Final[int] = 20              # ステージあたりの敵出現数（本家バトルシティー準拠）
 PLAYER_LIVES: Final[int] = 3                    # プレイヤーの初期ライフ数
 MAX_PLAYER_LIVES: Final[int] = 9                # プレイヤーの最大ライフ数
 
@@ -272,8 +272,9 @@ ITEM_EFFECT_DURATION: Final[dict[int, int]] = {
     ITEM_HELMET: 600    # 10秒間の無敵状態
 }
 
-# アイテムキャリア確率
-ITEM_CARRIER_PROBABILITY: Final[float] = 0.25  # 25%の敵がアイテムを持つ
+# アイテムキャリア出現順（本家準拠: ステージ内で4・11・18番目に出現する敵がアイテムを保持）
+ITEM_CARRIER_SPAWN_ORDER: Final[frozenset[int]] = frozenset({4, 11, 18})
+ITEM_CARRIER_FLASH_INTERVAL: Final[int] = 8    # キャリア敵の赤点滅周期（フレーム）
 
 # アイテム表示設定
 ITEM_VISIBILITY_DURATION: Final[int] = 600  # アイテムの表示時間（10秒）
@@ -339,7 +340,7 @@ STATE_STAGE_CLEAR: Final[int] = 3 # ステージクリア祝福画面
 
 # 状態遷移タイマー設定
 GAME_OVER_TIMER: Final[int] = 300   # ゲームオーバー画面表示時間（5秒）
-STAGE_CLEAR_TIMER: Final[int] = 120 # ステージクリア画面表示時間（2秒）
+STAGE_CLEAR_TIMER: Final[int] = 300 # ステージクリア集計画面表示時間（5秒、スキップ可能）
 
 # =============================================================================
 # 入力コントロールマッピング
@@ -352,6 +353,7 @@ KEY_LEFT: Final[int] = pyxel.KEY_LEFT   # タンクを左に移動
 KEY_RIGHT: Final[int] = pyxel.KEY_RIGHT # タンクを右に移動
 KEY_FIRE: Final[int] = pyxel.KEY_SPACE  # 弾丸を発射
 KEY_START: Final[int] = pyxel.KEY_RETURN # ゲーム開始、画面進行
+KEY_PAUSE: Final[int] = pyxel.KEY_P     # ポーズ切り替え
 KEY_QUIT: Final[int] = pyxel.KEY_Q      # ゲーム終了
 
 # ゲームパッド1コントロール（モバイル対応・アクセシビリティ向上）
@@ -373,7 +375,12 @@ COLLISION_DEBUG: Final[bool] = False        # 衝突判定可視化
 
 # タイマー関連設定
 INVINCIBLE_FRAMES: Final[int] = 120         # プレイヤー無敵時間（2秒）
+RESPAWN_INVINCIBLE_FRAMES: Final[int] = 180 # リスポーン後の無敵時間（3秒）
 DELAYED_DESTRUCTION_FRAMES: Final[int] = 24 # タイル破壊遅延時間
+SCORE_POPUP_DURATION: Final[int] = 48       # 撃破スコアポップアップの表示時間（0.8秒）
+
+# ハイスコア永続化設定
+HIGH_SCORE_FILE: Final[str] = "hiscore.dat" # ハイスコア保存ファイル（読み書き失敗時は無視）
 
 # UI関連設定
 TEXT_CHAR_WIDTH: Final[int] = 4             # Pyxelフォントの文字幅
@@ -452,8 +459,10 @@ TEXT_STAGE_CLEAR: Final[str] = "STAGE {} CLEAR!"
 UI_SCORE: Final[str] = "SCORE:{:06d}"
 UI_LIVES: Final[str] = "LIVES:{}"
 UI_STAGE: Final[str] = "STAGE:{:02d}"
-UI_KILLED: Final[str] = "KILLED:{:02d}"
+UI_LEFT: Final[str] = "LEFT:{:02d}"   # 未出現の敵数（本家のサイドバー残敵表示に相当）
 UI_POWER: Final[str] = "POWER:{}"
+UI_PAUSE: Final[str] = "PAUSE"
+CONTROLS_PAUSE: Final[str] = "P: PAUSE"
 
 # =============================================================================
 # 型定義用エイリアス

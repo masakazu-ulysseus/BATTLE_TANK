@@ -164,10 +164,47 @@ class GameManager:
 
         ゲーム進行に必要な基本状態変数を設定し、
         セッション管理の基盤を構築します。
+        ハイスコアはファイルから読み込み、セッションをまたいで永続化します。
         """
         self.score: int = 0
-        self.high_score: int = 0
+        self.high_score: int = self._load_high_score()
         self.current_stage: int = 1
+
+        # 撃破スコアポップアップ（{'x', 'y', 'value', 'timer'} の辞書リスト）
+        self.score_popups: List[dict] = []
+
+        # ステージクリア集計画面用のボーナス記録
+        self.last_stage_bonus: int = 0
+        self.last_life_bonus: int = 0
+
+    def _load_high_score(self) -> int:
+        """
+        ハイスコアをファイルから読み込む。
+
+        ファイルが存在しない、または読み込みに失敗した場合は0を返す
+        （ブラウザ実行などファイルシステムが使えない環境への配慮）。
+
+        戻り値:
+            int: 保存されていたハイスコア（失敗時は0）
+        """
+        try:
+            with open(HIGH_SCORE_FILE, "r", encoding="utf-8") as f:
+                return max(0, int(f.read().strip()))
+        except (OSError, ValueError):
+            return 0
+
+    def _save_high_score(self) -> None:
+        """
+        ハイスコアをファイルに保存する。
+
+        書き込みに失敗した場合は無視してゲームを継続する
+        （グレースフルデグラデーション）。
+        """
+        try:
+            with open(HIGH_SCORE_FILE, "w", encoding="utf-8") as f:
+                f.write(str(self.high_score))
+        except OSError:
+            pass
 
     def _init_shared_resources(self) -> None:
         """
@@ -234,6 +271,7 @@ class GameManager:
         self.stage_clear_timer: int = 0
         self.pause_timer: int = 0
         self.audio_delay_counter: int = 0
+        self.paused: bool = False  # プレイヤー操作によるポーズ状態
 
     def _init_audio_system(self) -> None:
         """
@@ -324,6 +362,7 @@ class GameManager:
         self.bullet_manager.clear_all_bullets()
         self.item_manager.clear_all_items()
         self.game_context.explosion_manager.clear_all()
+        self.score_popups.clear()
 
     def _emergency_stage_setup(self) -> None:
         """
@@ -465,11 +504,23 @@ class GameManager:
 
     def _handle_pause_effects(self) -> bool:
         """
-        一時停止効果を処理し、停止状態かを返す。
+        ポーズ入力と一時停止効果を処理し、停止状態かを返す。
+
+        ポーズシステム:
+        - Pキーまたはゲームパッドのスタートボタンでポーズをトグル
+        - ポーズ中は全ゲーム更新を停止（描画は継続）
 
         戻り値:
             一時停止中の場合True、通常処理継続の場合False
         """
+        # ポーズ切り替え入力のチェック
+        if pyxel.btnp(KEY_PAUSE) or pyxel.btnp(GAMEPAD_START):
+            self.paused = not self.paused
+
+        if self.paused:
+            return True
+
+        # アイテム効果等による一時停止の処理
         if self.pause_timer > 0:
             self.pause_timer -= 1
             return True
@@ -497,9 +548,41 @@ class GameManager:
         世界状態更新:
         - 遅延タイル破壊の処理
         - 視覚エフェクトの更新
+        - 撃破スコアポップアップの更新
         """
         self.map_manager.update_delayed_destructions()
         self.game_context.update_effects()
+        self._update_score_popups()
+
+    def _add_score_popup(self, x: float, y: float, value: int) -> None:
+        """
+        撃破位置にスコアポップアップを追加する（本家バトルシティー準拠）。
+
+        引数:
+            x: 表示中心のXピクセル座標
+            y: 表示中心のYピクセル座標
+            value: 表示するスコア値
+        """
+        self.score_popups.append({
+            'x': float(x),
+            'y': float(y),
+            'value': value,
+            'timer': SCORE_POPUP_DURATION
+        })
+
+    def _update_score_popups(self) -> None:
+        """スコアポップアップのタイマーを更新し、期限切れを除去する。"""
+        for popup in self.score_popups:
+            popup['timer'] -= 1
+            popup['y'] -= 0.25  # ゆっくり上昇しながら消える
+        self.score_popups = [p for p in self.score_popups if p['timer'] > 0]
+
+    def _draw_score_popups(self) -> None:
+        """スコアポップアップを描画する。"""
+        for popup in self.score_popups:
+            text = str(popup['value'])
+            x = int(popup['x']) - len(text) * TEXT_CHAR_WIDTH // 2
+            pyxel.text(x, int(popup['y']), text, COLOR_WHITE)
 
     def update_player(self) -> None:
         """
@@ -669,10 +752,16 @@ class GameManager:
             # グレネード効果音の再生
             self.game_context.play_sound_effect("explosion")
 
-            # 各破壊敵へのボーナスポイント付与
+            # 各破壊敵へのボーナスポイント付与とスコアポップアップ表示
             for enemy in destroyed_enemies:
-                enemy_score = ENEMY_SCORE_VALUES.get(enemy.tank_type, ENEMY_SCORE_BASE)
-                self.score += enemy_score + GRENADE_BONUS
+                enemy_score = ENEMY_SCORE_VALUES.get(enemy.enemy_type, ENEMY_SCORE_BASE)
+                awarded = enemy_score + GRENADE_BONUS
+                self.score += awarded
+                self._add_score_popup(
+                    enemy.x + TILE_SIZE // 2,
+                    enemy.y + TILE_SIZE // 2,
+                    awarded
+                )
 
     def update_collisions(self) -> None:
         """
@@ -728,10 +817,15 @@ class GameManager:
             self.item_manager
         )
 
-        # 各破壊敵へのポイント付与
+        # 各破壊敵へのポイント付与とスコアポップアップ表示
         for enemy in destroyed_enemies:
-            enemy_score = ENEMY_SCORE_VALUES.get(enemy.tank_type, ENEMY_SCORE_BASE)
+            enemy_score = ENEMY_SCORE_VALUES.get(enemy.enemy_type, ENEMY_SCORE_BASE)
             self.score += enemy_score
+            self._add_score_popup(
+                enemy.x + TILE_SIZE // 2,
+                enemy.y + TILE_SIZE // 2,
+                enemy_score
+            )
 
         # 破壊敵の即座清掃（ゲームプレイ問題回避）
         if destroyed_enemies:
@@ -832,6 +926,7 @@ class GameManager:
             # ゲーム進行状況のリセット
             self.score = 0
             self.current_stage = 1
+            self.paused = False
 
             # プレイヤー状態の初期化
             self._reset_player_state()
@@ -903,10 +998,11 @@ class GameManager:
 
     def _update_high_score(self) -> None:
         """
-        新記録達成時にハイスコアを更新。
+        新記録達成時にハイスコアを更新し、ファイルに永続化。
         """
         if self.score > self.high_score:
             self.high_score = self.score
+            self._save_high_score()
 
     def _play_game_over_audio(self) -> None:
         """
@@ -958,11 +1054,12 @@ class GameManager:
     def _calculate_stage_bonus(self) -> None:
         """
         ステージクリアボーナスを計算し、スコアに加算。
+
+        集計画面での表示のため、各ボーナス値を記録する。
         """
-        stage_bonus = self.current_stage * STAGE_CLEAR_BONUS_BASE
-        life_bonus = self.player.lives * LIFE_BONUS
-        total_bonus = stage_bonus + life_bonus
-        self.score += total_bonus
+        self.last_stage_bonus = self.current_stage * STAGE_CLEAR_BONUS_BASE
+        self.last_life_bonus = self.player.lives * LIFE_BONUS
+        self.score += self.last_stage_bonus + self.last_life_bonus
 
     def _play_stage_clear_audio(self) -> None:
         """
@@ -1051,16 +1148,12 @@ class GameManager:
 
     def update_stage_clear(self) -> None:
         """
-        ステージクリア祝福状態を更新。
+        ステージクリア集計画面の状態を更新。
 
-        ステージクリア機能:
-        - ステージ完了メッセージの表示
-        - 付与されたボーナスポイントの表示
+        集計画面機能（本家バトルシティー準拠）:
+        - 敵タイプ別の撃破数とスコアの集計表示
         - タイマー満了後の次ステージ自動進行
-        - プレイヤー達成感のための短い祝福期間
-
-        タイマーにより次のチャレンジへ進む前の
-        達成感確認時間を提供します。
+        - START/発射ボタンによるスキップ
 
         エラーハンドリング:
         - ステージ進行エラー時のフォールバック
@@ -1070,8 +1163,12 @@ class GameManager:
             # ステージクリアタイマーのカウントダウン
             self.stage_clear_timer -= 1
 
-            # タイマー満了時の次ステージ自動進行
-            if self.stage_clear_timer <= 0:
+            # スキップ入力のチェック（キーボード・ゲームパッド統合）
+            skip_inputs = [KEY_START, KEY_FIRE, GAMEPAD_FIRE, GAMEPAD_START]
+            skip_requested = any(pyxel.btnp(key) for key in skip_inputs)
+
+            # タイマー満了またはスキップ時の次ステージ自動進行
+            if self.stage_clear_timer <= 0 or skip_requested:
                 self.advance_stage()
 
         except Exception as e:
@@ -1231,8 +1328,9 @@ class GameManager:
         instructions = [
             (CONTROLS_MOVE, 110, COLOR_WHITE),
             (CONTROLS_FIRE, 120, COLOR_WHITE),
-            (CONTROLS_GAMEPAD, 140, COLOR_CYAN),
-            (CONTROLS_QUIT, 150, COLOR_WHITE)
+            (CONTROLS_PAUSE, 130, COLOR_WHITE),
+            (CONTROLS_GAMEPAD, 145, COLOR_CYAN),
+            (CONTROLS_QUIT, 155, COLOR_WHITE)
         ]
 
         for text, y, color in instructions:
@@ -1315,6 +1413,9 @@ class GameManager:
         # 爆発アニメーション（前景エフェクト）
         self.game_context.draw_effects()
 
+        # 撃破スコアポップアップ（最前面）
+        self._draw_score_popups()
+
     def _draw_game_ui(self) -> None:
         """
         ゲームユーザーインターフェイス要素を描画。
@@ -1330,14 +1431,12 @@ class GameManager:
         """
         特殊効果とオーバーレイを描画。
 
-        一時停止状態時には半透明オーバーレイと
-        一時停止テキストを表示します。
+        ポーズ中はゲーム画面を表示したまま「PAUSE」を点滅表示します
+        （本家バトルシティー準拠）。
         """
-        if self.pause_timer > 0:
-            # 半透明黒オーバーレイ
-            pyxel.rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_BLACK)
-            # 中央配置一時停止テキスト
-            self._draw_centered_text("PAUSED", SCREEN_HEIGHT // 2, COLOR_WHITE)
+        if self.paused or self.pause_timer > 0:
+            if (pyxel.frame_count // FLASH_INTERVAL) % 2 == 0:
+                self._draw_centered_text(UI_PAUSE, SCREEN_HEIGHT // 2, COLOR_YELLOW)
 
     def draw_ui(self) -> None:
         """
@@ -1389,15 +1488,15 @@ class GameManager:
 
     def _draw_bottom_ui_row(self, ui_y: int) -> None:
         """
-        UI下段（撃破数、パワーレベル）を描画。
+        UI下段（敵残数、パワーレベル）を描画。
 
         引数:
             ui_y: UI領域のY座標
         """
-        # 撃破敵数（左配置）
-        destroyed = self.enemy_manager.get_remaining_count()
-        killed_text = UI_KILLED.format(destroyed)
-        pyxel.text(8, ui_y + 8, killed_text, COLOR_WHITE)
+        # 未出現の敵数（左配置、本家のサイドバー残敵表示に相当）
+        left = self.enemy_manager.get_unspawned_count()
+        left_text = UI_LEFT.format(left)
+        pyxel.text(8, ui_y + 8, left_text, COLOR_WHITE)
 
         # 現在パワーレベル状態（中央左、緑でハイライト）
         power_text = POWER_LEVEL_NAMES[min(self.player.power_level, len(POWER_LEVEL_NAMES) - 1)]
@@ -1466,52 +1565,77 @@ class GameManager:
 
     def draw_stage_clear(self) -> None:
         """
-        ステージクリア祝福画面を描画。
+        ステージクリア集計画面を描画（本家バトルシティー準拠）。
 
-        ステージクリア画面機能:
-        - 背景として完了ステージ状態を表示
-        - 祝福オーバーレイメッセージ
-        - ステージ番号確認
-        - 成功を示す緑色の使用
-        - 次ステージ前の短い祝福
-
-        オーバーレイは背景でクリアされたステージを表示しながら、
-        ステージ完了に対する肯定的フィードバックを提供します。
+        集計画面構成:
+        - ステージクリアタイトルとハイスコア
+        - 敵タイプ別の撃破数・獲得スコア（スプライト付き）
+        - 合計撃破数
+        - ステージボーナス・ライフボーナス
+        - スキップ操作の案内（点滅表示）
 
         エラーハンドリング:
-        オーバーレイ描画エラー時も基本的な祝福メッセージを表示します。
+        描画エラー時も基本的な祝福メッセージを表示します。
         """
-        # 背景として完了ステージ状態を描画
-        self.draw_game()
+        pyxel.cls(COLOR_BLACK)
 
         try:
-            # ステージクリア祝福用の中央オーバーレイボックス作成
-            self._draw_stage_clear_overlay()
+            self._draw_stage_clear_tally()
 
         except Exception as e:
             if DEBUG_MODE:
-                print(f"Stage clear overlay error: {e}")
+                print(f"Stage clear tally error: {e}")
             # エラー時は基本的な祝福テキストのみ表示
             clear_text = TEXT_STAGE_CLEAR.format(self.current_stage)
             self._draw_centered_text(clear_text, SCREEN_HEIGHT // 2, COLOR_GREEN)
 
-    def _draw_stage_clear_overlay(self) -> None:
+    def _draw_stage_clear_tally(self) -> None:
         """
-        ステージクリア祝福オーバーレイを描画。
+        敵タイプ別撃破数の集計表を描画。
 
-        オーバーレイ構成:
-        - 背景と境界線
-        - ステージクリア祝福テキスト
+        各行の構成（左から）:
+        獲得ポイント / 撃破数 x / 敵スプライト
         """
-        # オーバーレイ配置計算
-        overlay_y = SCREEN_HEIGHT // 2 - 20
-        overlay_width = SCREEN_WIDTH - 64
-        overlay_height = 40
-
-        # オーバーレイ背景と境界線
-        pyxel.rect(32, overlay_y, overlay_width, overlay_height, COLOR_BLACK)
-        pyxel.rectb(32, overlay_y, overlay_width, overlay_height, COLOR_WHITE)
-
-        # ステージクリア祝福テキスト（肯定的緑色）
+        # ヘッダー: ステージクリアタイトル
         clear_text = TEXT_STAGE_CLEAR.format(self.current_stage)
-        self._draw_centered_text(clear_text, overlay_y + 16, COLOR_GREEN)
+        self._draw_centered_text(clear_text, 24, COLOR_GREEN)
+
+        # 現在スコア表示
+        score_text = UI_SCORE.format(self.score)
+        self._draw_centered_text(score_text, 36, COLOR_YELLOW)
+
+        # 敵タイプ別の集計行
+        tally = self.enemy_manager.destroyed_by_type
+        row_y = 56
+        total_destroyed = 0
+
+        for enemy_type in ENEMY_TYPES:
+            count = tally.get(enemy_type, 0)
+            points = count * ENEMY_SCORE_VALUES.get(enemy_type, ENEMY_SCORE_BASE)
+            total_destroyed += count
+
+            # ポイントと撃破数のテキスト
+            row_text = f"{points:5d} PTS {count:3d} x"
+            pyxel.text(64, row_y + 6, row_text, COLOR_WHITE)
+
+            # 敵スプライト（上向き）を行末に表示
+            sprite_coords = ENEMY_SPRITE_COORDS.get(enemy_type, {}).get(UP)
+            if sprite_coords:
+                pyxel.blt(64 + len(row_text) * TEXT_CHAR_WIDTH + 4, row_y,
+                          0, sprite_coords[0], sprite_coords[1],
+                          SPRITE_SIZE, SPRITE_SIZE, COLOR_BLACK)
+
+            row_y += 20
+
+        # 区切り線と合計撃破数
+        pyxel.line(64, row_y + 2, SCREEN_WIDTH - 64, row_y + 2, COLOR_WHITE)
+        pyxel.text(64, row_y + 8, f"TOTAL     {total_destroyed:3d}", COLOR_WHITE)
+
+        # ボーナス表示
+        bonus_y = row_y + 24
+        pyxel.text(64, bonus_y, f"STAGE BONUS {self.last_stage_bonus:5d}", COLOR_CYAN)
+        pyxel.text(64, bonus_y + 10, f"LIFE BONUS  {self.last_life_bonus:5d}", COLOR_CYAN)
+
+        # スキップ案内（点滅表示）
+        if (pyxel.frame_count // FLASH_INTERVAL) % 2 == 0:
+            self._draw_centered_text("PRESS ENTER TO CONTINUE", 216, COLOR_GREEN)
