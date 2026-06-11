@@ -251,6 +251,26 @@ class MapManager:
                         if self.is_valid_placement(x, y):
                             self.map_data[y][x] = TILE_WATER
         
+        # Generate ice patches - slippery terrain (stage 4 and later)
+        # Tanks slide in their moving direction while on ice (Battle City original spec)
+        if stage_num >= 4:
+            ice_patches = 1 + stage_num // 8  # Stage 4-7: 1, Stage 8-15: 2, etc.
+            for _ in range(ice_patches):
+                # Choose random location for 3x3 ice patch
+                start_x = random.randint(1, MAP_WIDTH - 4)   # Leave room for 3x3 patch
+                start_y = random.randint(3, MAP_HEIGHT - 5)  # Avoid edges and base area
+
+                # Create 3x3 ice patch
+                for dx in range(3):
+                    for dy in range(3):
+                        x, y = start_x + dx, start_y + dy
+
+                        # Ensure patch stays within map bounds
+                        if 0 <= x < MAP_WIDTH and 0 <= y < MAP_HEIGHT:
+                            # Only place ice in valid locations
+                            if self.is_valid_placement(x, y):
+                                self.map_data[y][x] = TILE_ICE
+
         # Generate forest patches - visual cover areas
         # Count scales with stage number for variety
         forest_patches = 1 + stage_num // 3  # Stage 2-4: 1, Stage 5-7: 2, etc.

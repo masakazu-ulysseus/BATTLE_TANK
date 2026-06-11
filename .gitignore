@@ -34,3 +34,8 @@ dist/
 
 # Logs
 *.log
+# Game runtime data
+hiscore.dat
+
+# MCP tool session data
+data/

@@ -48,8 +48,8 @@ UI_HEIGHT: Final[int] = 16       # 画面下部のUI表示エリア高さ
 # =============================================================================
 
 # ステージ進行パラメータ
-TOTAL_STAGES: Final[int] = 16                    # ゲーム内の最大ステージ数
-ENEMIES_PER_STAGE: Final[int] = 10              # ステージあたりの敵出現数（リリース用バランス）
+TOTAL_STAGES: Final[int] = 35                    # ゲーム内の最大ステージ数（本家バトルシティー準拠）
+ENEMIES_PER_STAGE: Final[int] = 10              # ステージあたりの敵出現数（バランス調整値。本家は20）
 PLAYER_LIVES: Final[int] = 3                    # プレイヤーの初期ライフ数
 MAX_PLAYER_LIVES: Final[int] = 9                # プレイヤーの最大ライフ数
 
@@ -272,8 +272,13 @@ ITEM_EFFECT_DURATION: Final[dict[int, int]] = {
     ITEM_HELMET: 600    # 10秒間の無敵状態
 }
 
-# アイテムキャリア確率
-ITEM_CARRIER_PROBABILITY: Final[float] = 0.25  # 25%の敵がアイテムを持つ
+# アイテムキャリア出現順（1始まり）
+# 本家準拠の出現位置（20機中の4・11・18番目 = 20%・55%・90%地点）を
+# ENEMIES_PER_STAGE に応じて比率換算する（敵20機なら4・11・18、敵10機なら2・6・9）
+ITEM_CARRIER_SPAWN_ORDER: Final[frozenset[int]] = frozenset(
+    max(1, round(ENEMIES_PER_STAGE * ratio)) for ratio in (0.20, 0.55, 0.90)
+)
+ITEM_CARRIER_FLASH_INTERVAL: Final[int] = 8    # キャリア敵の赤点滅周期（フレーム）
 
 # アイテム表示設定
 ITEM_VISIBILITY_DURATION: Final[int] = 600  # アイテムの表示時間（10秒）
@@ -318,11 +323,13 @@ FOG_SEQUENCE: Final[list[int]] = [1, 2, 1, 2]  # 霧アニメーション順序
 # オーディオ・サウンドシステム
 # =============================================================================
 
-# サウンドチャンネル設定
-SOUND_CHANNEL_ENGINE: Final[int] = 0        # エンジン音・移動音
-SOUND_CHANNEL_FIRE: Final[int] = 1          # 発射音・爆発音
-SOUND_CHANNEL_ITEM: Final[int] = 2          # アイテム音・効果音
-SOUND_CHANNEL_MUSIC: Final[int] = 3         # 音楽・BGM
+# サウンドチャンネル設定（役割別に分離し、同一チャンネルでの上書き競合を防ぐ）
+# 詳細は docs/sound_system.md を参照
+SOUND_CHANNEL_ENGINE: Final[int] = 0        # エンジン音（移動中）専用
+SOUND_CHANNEL_FIRE: Final[int] = 1          # 発射音専用
+SOUND_CHANNEL_EXPLOSION: Final[int] = 2     # 爆発・被弾・敵撃破・弾相殺
+SOUND_CHANNEL_ITEM: Final[int] = 3          # アイテム取得・パワーアップ・ジングル類
+SOUND_CHANNEL_MUSIC: Final[int] = 3         # 音楽・ジングル（ITEMと共用）
 
 # サウンド再生間隔
 ENGINE_SOUND_INTERVAL: Final[int] = 8       # エンジン音の再生間隔
@@ -336,10 +343,12 @@ STATE_TITLE: Final[int] = 0       # ハイスコア表示付きタイトル画�
 STATE_GAME: Final[int] = 1        # すべてのシステムが動作するアクティブゲームプレイ
 STATE_GAME_OVER: Final[int] = 2   # 最終スコア付きゲームオーバー画面
 STATE_STAGE_CLEAR: Final[int] = 3 # ステージクリア祝福画面
+STATE_ENDING: Final[int] = 4      # 全ステージクリア時のエンディング画面
 
 # 状態遷移タイマー設定
 GAME_OVER_TIMER: Final[int] = 300   # ゲームオーバー画面表示時間（5秒）
-STAGE_CLEAR_TIMER: Final[int] = 120 # ステージクリア画面表示時間（2秒）
+STAGE_CLEAR_TIMER: Final[int] = 300 # ステージクリア集計画面表示時間（5秒、スキップ可能）
+ENDING_TIMER: Final[int] = 900      # エンディング画面表示時間（15秒、スキップ可能）
 
 # =============================================================================
 # 入力コントロールマッピング
@@ -352,6 +361,7 @@ KEY_LEFT: Final[int] = pyxel.KEY_LEFT   # タンクを左に移動
 KEY_RIGHT: Final[int] = pyxel.KEY_RIGHT # タンクを右に移動
 KEY_FIRE: Final[int] = pyxel.KEY_SPACE  # 弾丸を発射
 KEY_START: Final[int] = pyxel.KEY_RETURN # ゲーム開始、画面進行
+KEY_PAUSE: Final[int] = pyxel.KEY_P     # ポーズ切り替え
 KEY_QUIT: Final[int] = pyxel.KEY_Q      # ゲーム終了
 
 # ゲームパッド1コントロール（モバイル対応・アクセシビリティ向上）
@@ -373,7 +383,12 @@ COLLISION_DEBUG: Final[bool] = False        # 衝突判定可視化
 
 # タイマー関連設定
 INVINCIBLE_FRAMES: Final[int] = 120         # プレイヤー無敵時間（2秒）
+RESPAWN_INVINCIBLE_FRAMES: Final[int] = 180 # リスポーン後の無敵時間（3秒）
 DELAYED_DESTRUCTION_FRAMES: Final[int] = 24 # タイル破壊遅延時間
+SCORE_POPUP_DURATION: Final[int] = 48       # 撃破スコアポップアップの表示時間（0.8秒）
+
+# ハイスコア永続化設定
+HIGH_SCORE_FILE: Final[str] = "hiscore.dat" # ハイスコア保存ファイル（読み書き失敗時は無視）
 
 # UI関連設定
 TEXT_CHAR_WIDTH: Final[int] = 4             # Pyxelフォントの文字幅
@@ -447,13 +462,18 @@ TEXT_GAME_OVER: Final[str] = "GAME OVER"
 TEXT_FINAL_SCORE: Final[str] = "FINAL SCORE: {:06d}"
 TEXT_NEW_HIGH_SCORE: Final[str] = "NEW HIGH SCORE!"
 TEXT_STAGE_CLEAR: Final[str] = "STAGE {} CLEAR!"
+TEXT_CONGRATULATIONS: Final[str] = "CONGRATULATIONS!"
+TEXT_ALL_CLEAR: Final[str] = "ALL {} STAGES CLEARED!"
+PROMPT_CONTINUE: Final[str] = "PRESS ENTER TO CONTINUE"
 
 # UI表示テキスト
 UI_SCORE: Final[str] = "SCORE:{:06d}"
 UI_LIVES: Final[str] = "LIVES:{}"
 UI_STAGE: Final[str] = "STAGE:{:02d}"
-UI_KILLED: Final[str] = "KILLED:{:02d}"
+UI_LEFT: Final[str] = "LEFT:{:02d}"   # 未出現の敵数（本家のサイドバー残敵表示に相当）
 UI_POWER: Final[str] = "POWER:{}"
+UI_PAUSE: Final[str] = "PAUSE"
+CONTROLS_PAUSE: Final[str] = "P: PAUSE"
 
 # =============================================================================
 # 型定義用エイリアス

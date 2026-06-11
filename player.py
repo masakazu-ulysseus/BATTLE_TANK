@@ -41,7 +41,6 @@ class Player:
         is_moving (bool): タンクが現在スムーズ移動中かどうか
         target_x (int): スムーズ移動の目的地X座標
         target_y (int): スムーズ移動の目的地Y座標
-        move_sound_timer (int): エンジン音の間隔用タイマー
     """
     def __init__(self, x: int, y: int) -> None:
         """
@@ -67,9 +66,6 @@ class Player:
         self.target_x: int = x  # 現在移動の目的地X
         self.target_y: int = y  # 現在移動の目的地Y
         
-        # エンジン音システム（初回使用時に初期化）
-        self.move_sound_timer: int = 0  # エンジン音の間隔用タイマー
-        
     def update(self, map_manager: 'MapManager') -> None:
         """
         各フレームでプレイヤータンクの状態、入力、移動を更新。
@@ -87,42 +83,33 @@ class Player:
         # 無敵中はプレイヤーが点滅し、ダメージを受けない
         if self.invincible_timer > 0:
             self.invincible_timer -= 1
-        
-        # エンジン音タイマーを更新（毎フレーム減少）
-        if hasattr(self, 'move_sound_timer') and self.move_sound_timer > 0:
-            self.move_sound_timer -= 1
-        
+
         # 衝突による位置ずれを防ぐためグリッド整列を強制
         self.force_grid_alignment()
-        
-        # 入力状態に基づいた現実的なタンクエンジン音処理
-        # スムーズ移動中でも、移動キーまたはゲームパッドが押されている間はエンジン音が鳴る
+
+        # 入力状態に基づいたタンクエンジン音処理
+        # 重要: play() の連打は再生コマンドの蓄積によりオーディオエンジンを
+        # 停止させるため（docs/sound_system.md 参照）、ループ再生を1回だけ
+        # 開始し、キーを離したら停止する方式とする
         key_pressed = (pyxel.btn(KEY_UP) or pyxel.btn(KEY_DOWN) or
                       pyxel.btn(KEY_LEFT) or pyxel.btn(KEY_RIGHT) or
                       pyxel.btn(GAMEPAD_UP) or pyxel.btn(GAMEPAD_DOWN) or
                       pyxel.btn(GAMEPAD_LEFT) or pyxel.btn(GAMEPAD_RIGHT))
-        
+
         if key_pressed:
-            # 初回実行時にサウンドタイマーを初期化
-            if not hasattr(self, 'move_sound_timer'):
-                self.move_sound_timer = 0
-                
-            # キーが押されている間は定期的にエンジン音を再生
-            # 連続的な「ブーーー」エンジン音効果を作成
-            if self.move_sound_timer <= 0:
-                pyxel.play(0, 0)  # 機械的なエンジンブザー音を再生
-                self.move_sound_timer = 8  # 連続性のため音を8フレーム間隔で配置
+            # チャンネルが空いている時のみループ再生を開始（連打防止）
+            if pyxel.play_pos(SOUND_CHANNEL_ENGINE) is None:
+                pyxel.play(SOUND_CHANNEL_ENGINE, 0, loop=True)
         else:
-            # 移動キーが押されていない時はタイマーをリセット
-            # プレイヤーが入力を停止した時にエンジン音を停止
-            if hasattr(self, 'move_sound_timer'):
-                self.move_sound_timer = 0
+            # キーを離したらエンジン音を停止（再生中の場合のみ）
+            if pyxel.play_pos(SOUND_CHANNEL_ENGINE) is not None:
+                pyxel.stop(SOUND_CHANNEL_ENGINE)
         
         # スムーズ移動システムを処理
         # 現在グリッド位置間を移動中の場合、スムーズ移動を継続
         if self.move_timer > 0:
             self.move_timer -= 1
-            self.smooth_move()  # 目標位置へ補間
+            self.smooth_move(map_manager)  # 目標位置へ補間
             return  # 移動中は入力処理をスキップ
         
         # 新しい移動やアクション用のプレイヤー入力を処理
@@ -170,11 +157,9 @@ class Player:
                 self.start_move(TILE_SIZE, 0)
                 moved = True
         
-        # 発射入力を処理（ボタン押下、長押しではない）
-        # 発射音と弾丸作成はゲームマネージャーが処理（キーボードまたはゲームパッド）
-        if pyxel.btnp(KEY_FIRE) or pyxel.btnp(GAMEPAD_FIRE):
-            pyxel.play(0, 1)  # 発射音効果を直接再生
-            # 注意: 実際の弾丸作成は game_manager.update_player() で発生
+        # 発射入力はゲームマネージャーが処理する
+        # 発射音は実際に弾丸が発射された時のみ game_manager 側で再生
+        # （弾数制限で撃てない時に音だけ鳴る不整合を防ぐ）
     
     def start_move(self, dx: int, dy: int) -> None:
         """
@@ -217,17 +202,21 @@ class Player:
             self.x = float(nearest_grid_x)
             self.y = float(nearest_grid_y)
     
-    def smooth_move(self) -> None:
+    def smooth_move(self, map_manager: 'MapManager') -> None:
         """
         目標位置へのスムーズ補間を1フレーム実行。
-        
+
         線形補間を使用して現在位置から目標位置まで
         move_timerで指定された時間でスムーズに移動。
         移動完了時は、衝突検出用のグリッド整列を保証するため
-        正確な目標位置にスナップ。
-        
+        正確な目標位置にスナップ。氷タイル上で停止した場合は
+        同方向への滑り移動を継続する。
+
         目標位置計算が間違っていた場合の視覚的不具合を防ぐため
         境界クランプを含む。
+
+        引数:
+            map_manager (MapManager): 氷タイル判定・滑り移動の衝突検出用
         """
         # 移動完了すべきかチェック
         if self.move_timer <= 0:
@@ -235,6 +224,8 @@ class Player:
             self.x = float(self.target_x)
             self.y = float(self.target_y)
             self.is_moving = False  # 移動完了
+            # 氷タイル上なら同方向へ滑り続ける（本家バトルシティー準拠）
+            self.check_ice_slide(map_manager)
             return
         
         # このフレームの移動ステップを計算
@@ -253,7 +244,30 @@ class Player:
         # 衝突検出が失敗した場合の視覚的不具合を防ぐ
         if self.x < 0 or self.x >= (MAP_WIDTH * TILE_SIZE):
             self.x = max(0, min(self.x, (MAP_WIDTH * TILE_SIZE) - TILE_SIZE))  # Xを有効範囲にクランプ
-    
+
+    def check_ice_slide(self, map_manager: 'MapManager') -> None:
+        """
+        氷タイル上での滑り移動を判定・開始する。
+
+        タンク中心が氷タイル上にあり、かつ進行方向に移動可能な場合、
+        入力に関係なく同方向への移動を自動的に継続する。
+        氷を抜けるか障害物に当たるまで滑り続ける。
+
+        引数:
+            map_manager (MapManager): タイル参照と衝突検出用
+        """
+        # タンク中心のタイルを取得
+        center_grid_x, center_grid_y = map_manager.pixel_to_grid(
+            self.x + TILE_SIZE // 2, self.y + TILE_SIZE // 2
+        )
+        if map_manager.get_tile(center_grid_x, center_grid_y) != TILE_ICE:
+            return
+
+        # 進行方向へ移動可能なら滑り続ける
+        dx, dy = DIRECTION_VECTORS.get(self.direction, (0, 0))
+        if (dx, dy) != (0, 0) and self.can_move(dx * TILE_SIZE, dy * TILE_SIZE, map_manager):
+            self.start_move(dx * TILE_SIZE, dy * TILE_SIZE)
+
     def can_move(self, dx: int, dy: int, map_manager: 'MapManager') -> bool:
         """
         タンクが衝突なしに新しい位置に移動できるかチェック。
@@ -398,30 +412,50 @@ class Player:
         """
         敵弾丸や衝突によるプレイヤータンクのダメージを処理。
         
-        ダメージシステム:
+        ダメージシステム（本家バトルシティー準拠）:
         - 無敵フレーム中はダメージを無視
         - ライフ数を1減少
-        - ダメージ後2秒間の無敵を付与
-        - 死亡時にパワーレベルを基本にリセット
+        - パワーレベルを基本にリセット
+        - 残機がある場合は開始位置にリスポーンし、3秒間の無敵を付与
         - ゲームオーバー検出用の死亡状態を返す
-        
+
         戻り値:
             bool: プレイヤーが死亡（lives <= 0）した場合True、生存中の場合False
         """
         # プレイヤーが現在無敵の場合はダメージを無視
         if self.invincible_timer > 0:
             return False  # ダメージなし
-        
+
         # ダメージ効果を適用
         self.lives -= 1  # ライフを1失う
-        self.invincible_timer = 120  # 60FPSで2秒間の無敵
-        self.power_level = POWER_NORMAL  # 死亡時に基本パワーにリセット
-        
+        self.power_level = POWER_NORMAL  # 撃破時に基本パワーにリセット
+
         # プレイヤーが現在死亡しているかチェック
         if self.lives <= 0:
             return True  # プレイヤー死亡 - ゲームオーバーをトリガー
-        
+
+        # 残機がある場合は開始位置にリスポーン（本家準拠）
+        self.respawn()
         return False  # プレイヤーは残りライフで生存
+
+    def respawn(self) -> None:
+        """
+        プレイヤーを開始位置にリスポーンさせる。
+
+        リスポーン処理:
+        - 開始位置（基地前）への再配置
+        - 向きを上方向にリセット
+        - 移動状態のリセット（移動中の補間を中断）
+        - リスポーン無敵（3秒間）の付与
+        """
+        self.x = float(PLAYER_START_GRID_X * TILE_SIZE)
+        self.y = float(PLAYER_START_GRID_Y * TILE_SIZE)
+        self.direction = UP
+        self.is_moving = False
+        self.move_timer = 0
+        self.target_x = int(self.x)
+        self.target_y = int(self.y)
+        self.invincible_timer = RESPAWN_INVINCIBLE_FRAMES
     
     def add_power_up(self) -> None:
         """

@@ -147,7 +147,7 @@ class CollisionManager:
                         destroyed_enemies.append(enemy)
 
                         # 敵破壊サウンドを再生
-                        pyxel.play(SOUND_CHANNEL_FIRE, 7)  # 敵破壊音
+                        pyxel.play(SOUND_CHANNEL_EXPLOSION, 7)  # 敵破壊音
 
                         # 敵がアイテムを持っていた場合はドロップ
                         if enemy.carries_item and enemy.item_type is not None:
