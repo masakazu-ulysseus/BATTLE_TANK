@@ -295,6 +295,48 @@ class SoundManager:
         )
 
         pyxel.musics[3].set([9], [10], [11], [])
+
+        # =====================================================================
+        # ステージクリア曲 - 勝利ファンファーレ（ハ長調・4小節・約2.7秒、非ループ）
+        # =====================================================================
+
+        # メロディ（パルス波）: 上昇アルペジオ→ヒット連打→駆け下がり→終止
+        pyxel.sounds[20].set(
+            notes="c3e3g3c4e4rc4r"   # 第1小節: 駆け上がるアルペジオ
+                  "e4e4e4rg4g4g4r"   # 第2小節: 勝利のヒット連打
+                  "a4g4f4e4f4e4d4c4"  # 第3小節: 華麗な駆け下がり
+                  "g4a4g4e4c4rc4r",  # 第4小節: 弾んで終止
+            tones="p",
+            volumes="77777666",
+            effects="n",
+            speed=10
+        )
+
+        # ベース（三角波）: 力強い土台
+        pyxel.sounds[21].set(
+            notes="c2rg1rc2rg1r"
+                  "c2rg1rc2rg1r"
+                  "f1rc2rg1rg1r"
+                  "c2c2g1g1c2rc2r",
+            tones="t",
+            volumes="6",
+            effects="n",
+            speed=10
+        )
+
+        # ドラム（ノイズ）: スネアロールから決めのヒットへ
+        pyxel.sounds[22].set(
+            notes="d2d2d2d2c1rd2r"   # 第1小節: スネアロールで開幕
+                  "c1rd2rc1rd2r"     # 第2小節: マーチビート
+                  "c1rd2rc1c1d2d2"   # 第3小節: 畳み掛け
+                  "d2d2d2d2c1rc1r",  # 第4小節: ロール→決めの2発
+            tones="n",
+            volumes="5464",
+            effects="n",
+            speed=10
+        )
+
+        pyxel.musics[4].set([20], [21], [22], [])
     
     def play_sound(self, sound_id, channel=0):
         """効果音を再生"""
@@ -348,6 +390,7 @@ class SoundManager:
     MUSIC_TITLE = 1
     MUSIC_GAME_OVER = 2
     MUSIC_ENDING = 3
+    MUSIC_STAGE_CLEAR = 4
     
     def play_move_sound(self):
         """タンク移動音を再生（エンジン専用チャンネル）"""
@@ -402,8 +445,8 @@ class SoundManager:
         self.play_music(self.MUSIC_ENDING, loop=True)
 
     def play_stage_clear_music(self):
-        """Play stage clear music - disabled, using sound effect instead"""
-        pass  # No stage clear BGM
+        """ステージクリアBGMを再生（3chの勝利ファンファーレ、非ループ）"""
+        self.play_music(self.MUSIC_STAGE_CLEAR, loop=False)
     
     def play_hit_sound(self):
         """Play player hit sound"""

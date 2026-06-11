@@ -1075,10 +1075,12 @@ class GameManager:
 
     def _play_stage_clear_audio(self) -> None:
         """
-        ステージクリア音響効果を再生。
+        ステージクリアBGM（3chの勝利ファンファーレ）を再生。
+
+        集計画面表示中はゲームSEが鳴らないため、全チャンネルを使用できる。
         """
         try:
-            self.game_context.sound_manager.play_stage_clear_sound()
+            self.game_context.sound_manager.play_stage_clear_music()
         except Exception as e:
             if DEBUG_MODE:
                 print(f"Stage clear audio error: {e}")
@@ -1327,6 +1329,8 @@ class GameManager:
         self.state = STATE_GAME
         self.init_stage()
         try:
+            # クリアBGMがゲームプレイのチャンネルに残らないよう全停止してから開始
+            pyxel.stop()
             self.game_context.sound_manager.play_stage_start_jingle()
         except Exception as e:
             if DEBUG_MODE:

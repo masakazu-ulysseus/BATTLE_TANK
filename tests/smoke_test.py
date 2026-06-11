@@ -68,6 +68,11 @@ def main() -> None:
     check("エンディング曲の各パートの長さが揃っている",
           len(pyxel.sounds[9].notes) == len(pyxel.sounds[10].notes)
           == len(pyxel.sounds[11].notes))
+    check("ステージクリア曲の3パートが定義されている",
+          all(len(pyxel.sounds[i].notes) > 0 for i in (20, 21, 22)))
+    check("ステージクリア曲の各パートの長さが揃っている",
+          len(pyxel.sounds[20].notes) == len(pyxel.sounds[21].notes)
+          == len(pyxel.sounds[22].notes))
 
     # --- 2. ゲームループ600フレーム ---
     gm.start_new_game()
