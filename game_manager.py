@@ -269,6 +269,7 @@ class GameManager:
         """
         self.game_over_timer: int = 0
         self.stage_clear_timer: int = 0
+        self.ending_timer: int = 0
         self.pause_timer: int = 0
         self.audio_delay_counter: int = 0
         self.paused: bool = False  # プレイヤー操作によるポーズ状態
@@ -430,7 +431,8 @@ class GameManager:
                 STATE_TITLE: self.update_title,
                 STATE_GAME: self.update_game,
                 STATE_GAME_OVER: self.update_game_over,
-                STATE_STAGE_CLEAR: self.update_stage_clear
+                STATE_STAGE_CLEAR: self.update_stage_clear,
+                STATE_ENDING: self.update_ending
             }
 
             handler = state_handlers.get(self.state)
@@ -1008,10 +1010,12 @@ class GameManager:
 
     def _play_game_over_audio(self) -> None:
         """
-        ゲームオーバー音響効果を再生。
+        ゲームオーバー音楽を再生。
+
+        BGM（メロディ＋ベース）のみを再生し、
+        SE5との二重再生は行わない（docs/sound_system.md 準拠）。
         """
         try:
-            self.game_context.sound_manager.play_game_over_sound()
             self.game_context.sound_manager.play_game_over_music()
         except Exception as e:
             if DEBUG_MODE:
@@ -1118,7 +1122,7 @@ class GameManager:
             self.audio_delay_counter -= 1
             if self.audio_delay_counter == 0:
                 try:
-                    self.game_context.sound_manager.play_game_over_sound()
+                    self.game_context.sound_manager.play_game_over_music()
                 except Exception as e:
                     if DEBUG_MODE:
                         print(f"Delayed audio error: {e}")
@@ -1214,14 +1218,96 @@ class GameManager:
 
     def _handle_game_completion(self) -> None:
         """
-        ゲーム全体完了を処理。
+        ゲーム全体完了（全ステージクリア）を処理。
 
         完了処理:
         - 大幅な完了ボーナスの付与
-        - 最終スコア表示としてのゲームオーバー画面
+        - ハイスコアの更新・保存
+        - エンディング画面への遷移とビクトリー曲の再生
         """
         self.score += GAME_COMPLETION_BONUS
-        self.game_over()
+        self._update_high_score()
+
+        # エンディング画面への遷移
+        self.state = STATE_ENDING
+        self.ending_timer = ENDING_TIMER
+
+        # エンディング曲の再生
+        try:
+            self.game_context.sound_manager.play_ending_music()
+        except Exception as e:
+            if DEBUG_MODE:
+                print(f"Ending music error: {e}")
+
+    def update_ending(self) -> None:
+        """
+        エンディング画面の状態を更新。
+
+        エンディング機能:
+        - タイマー満了またはSTART/発射ボタンでタイトル画面へ復帰
+        - 復帰時にタイトルBGMを再開
+        """
+        try:
+            self.ending_timer -= 1
+
+            skip_inputs = [KEY_START, KEY_FIRE, GAMEPAD_FIRE, GAMEPAD_START]
+            skip_requested = any(pyxel.btnp(key) for key in skip_inputs)
+
+            if self.ending_timer <= 0 or skip_requested:
+                self._return_to_title()
+
+        except Exception as e:
+            if DEBUG_MODE:
+                print(f"Ending update error: {e}")
+            self.state = STATE_TITLE
+
+    def draw_ending(self) -> None:
+        """
+        全クリア祝福のエンディング画面を描画。
+
+        画面構成（docs/ending_screen.md 準拠）:
+        - 虹色に変化する CONGRATULATIONS!
+        - 全ステージクリアメッセージ
+        - プレイヤー戦車スプライト
+        - 最終スコアと新記録表示
+        - 点滅する操作案内
+        """
+        pyxel.cls(COLOR_BLACK)
+
+        try:
+            # 虹色に変化する祝福タイトル（8フレームごとに色サイクル）
+            rainbow_colors = [COLOR_RED, COLOR_ORANGE, COLOR_YELLOW,
+                              COLOR_GREEN, COLOR_CYAN, COLOR_PINK]
+            color = rainbow_colors[(pyxel.frame_count // 8) % len(rainbow_colors)]
+            self._draw_centered_text(TEXT_CONGRATULATIONS, 60, color)
+
+            # 達成メッセージ
+            all_clear_text = TEXT_ALL_CLEAR.format(TOTAL_STAGES)
+            self._draw_centered_text(all_clear_text, 84, COLOR_WHITE)
+
+            # プレイヤー戦車スプライト（画面中央）
+            sprite_x, sprite_y = PLAYER_SPRITE_COORDS[UP]
+            pyxel.blt(SCREEN_WIDTH // 2 - SPRITE_SIZE // 2, 104,
+                      0, sprite_x, sprite_y,
+                      SPRITE_SIZE, SPRITE_SIZE, COLOR_BLACK)
+
+            # 最終スコア表示
+            score_text = TEXT_FINAL_SCORE.format(self.score)
+            self._draw_centered_text(score_text, 136, COLOR_WHITE)
+
+            # 新記録達成の祝福（該当時のみ）
+            if self.score >= self.high_score:
+                self._draw_centered_text(TEXT_NEW_HIGH_SCORE, 152, COLOR_YELLOW)
+
+            # 点滅する操作案内
+            if (pyxel.frame_count // FLASH_INTERVAL) % 2 == 0:
+                self._draw_centered_text(PROMPT_CONTINUE, 192, COLOR_GREEN)
+
+        except Exception as e:
+            if DEBUG_MODE:
+                print(f"Ending draw error: {e}")
+            self._draw_centered_text(TEXT_CONGRATULATIONS,
+                                     SCREEN_HEIGHT // 2, COLOR_YELLOW)
 
     def _continue_to_next_stage(self) -> None:
         """
@@ -1261,7 +1347,8 @@ class GameManager:
                 STATE_TITLE: self.draw_title,
                 STATE_GAME: self.draw_game,
                 STATE_GAME_OVER: self.draw_game_over,
-                STATE_STAGE_CLEAR: self.draw_stage_clear
+                STATE_STAGE_CLEAR: self.draw_stage_clear,
+                STATE_ENDING: self.draw_ending
             }
 
             handler = draw_handlers.get(self.state)
@@ -1646,4 +1733,4 @@ class GameManager:
 
         # スキップ案内（点滅表示）
         if (pyxel.frame_count // FLASH_INTERVAL) % 2 == 0:
-            self._draw_centered_text("PRESS ENTER TO CONTINUE", 216, COLOR_GREEN)
+            self._draw_centered_text(PROMPT_CONTINUE, 216, COLOR_GREEN)

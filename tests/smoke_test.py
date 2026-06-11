@@ -56,6 +56,18 @@ def main() -> None:
     check("SEチャンネルが役割別に分離されている",
           len({SOUND_CHANNEL_ENGINE, SOUND_CHANNEL_FIRE,
                SOUND_CHANNEL_EXPLOSION, SOUND_CHANNEL_ITEM}) == 4)
+    check("タイトル曲の3パートが定義されている",
+          all(len(pyxel.sounds[i].notes) > 0 for i in (12, 14, 15)))
+    check("タイトル曲の各パートの長さが揃っている",
+          len(pyxel.sounds[12].notes) == len(pyxel.sounds[14].notes)
+          == len(pyxel.sounds[15].notes))
+    check("ゲームオーバー曲の2パートの長さが揃っている",
+          len(pyxel.sounds[13].notes) == len(pyxel.sounds[19].notes) > 0)
+    check("エンディング曲の3パートが定義されている",
+          all(len(pyxel.sounds[i].notes) > 0 for i in (9, 10, 11)))
+    check("エンディング曲の各パートの長さが揃っている",
+          len(pyxel.sounds[9].notes) == len(pyxel.sounds[10].notes)
+          == len(pyxel.sounds[11].notes))
 
     # --- 2. ゲームループ600フレーム ---
     gm.start_new_game()
@@ -131,6 +143,21 @@ def main() -> None:
     for _ in range(STAGE_CLEAR_TIMER + 1):
         gm.update()
     check("タイマー満了で次ステージへ進行", gm.state == STATE_GAME)
+
+    # --- エンディング（docs/ending_screen.md 準拠） ---
+    gm.current_stage = TOTAL_STAGES
+    score_before = gm.score
+    gm.advance_stage()
+    check("全ステージクリアでエンディングへ遷移", gm.state == STATE_ENDING)
+    check("完了ボーナスが加算される",
+          gm.score == score_before + GAME_COMPLETION_BONUS)
+    gm.draw()  # エンディング画面の描画がクラッシュしないこと
+    check("エンディング画面の描画", True)
+    for _ in range(ENDING_TIMER + 1):
+        gm.update()
+    check("エンディング後にタイトルへ復帰", gm.state == STATE_TITLE)
+    if os.path.exists(HIGH_SCORE_FILE):
+        os.remove(HIGH_SCORE_FILE)  # エンディングで保存されたハイスコアを清掃
 
     # --- 8. ハイスコア永続化 ---
     gm.score = 99999

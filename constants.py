@@ -339,10 +339,12 @@ STATE_TITLE: Final[int] = 0       # ハイスコア表示付きタイトル画�
 STATE_GAME: Final[int] = 1        # すべてのシステムが動作するアクティブゲームプレイ
 STATE_GAME_OVER: Final[int] = 2   # 最終スコア付きゲームオーバー画面
 STATE_STAGE_CLEAR: Final[int] = 3 # ステージクリア祝福画面
+STATE_ENDING: Final[int] = 4      # 全ステージクリア時のエンディング画面
 
 # 状態遷移タイマー設定
 GAME_OVER_TIMER: Final[int] = 300   # ゲームオーバー画面表示時間（5秒）
 STAGE_CLEAR_TIMER: Final[int] = 300 # ステージクリア集計画面表示時間（5秒、スキップ可能）
+ENDING_TIMER: Final[int] = 900      # エンディング画面表示時間（15秒、スキップ可能）
 
 # =============================================================================
 # 入力コントロールマッピング
@@ -456,6 +458,9 @@ TEXT_GAME_OVER: Final[str] = "GAME OVER"
 TEXT_FINAL_SCORE: Final[str] = "FINAL SCORE: {:06d}"
 TEXT_NEW_HIGH_SCORE: Final[str] = "NEW HIGH SCORE!"
 TEXT_STAGE_CLEAR: Final[str] = "STAGE {} CLEAR!"
+TEXT_CONGRATULATIONS: Final[str] = "CONGRATULATIONS!"
+TEXT_ALL_CLEAR: Final[str] = "ALL {} STAGES CLEARED!"
+PROMPT_CONTINUE: Final[str] = "PRESS ENTER TO CONTINUE"
 
 # UI表示テキスト
 UI_SCORE: Final[str] = "SCORE:{:06d}"
