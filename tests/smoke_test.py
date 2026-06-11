@@ -94,13 +94,17 @@ def main() -> None:
     from enemy import Enemy, EnemyManager
     em = EnemyManager()
     em.init_stage(1)
+    expected_carriers = sorted(ITEM_CARRIER_SPAWN_ORDER)
     carriers = []
     for order in range(1, ENEMIES_PER_STAGE + 1):
         e = Enemy(0, 0, TANK_LIGHT, carries_item=(order in ITEM_CARRIER_SPAWN_ORDER))
         if e.carries_item:
             carriers.append(order)
             check(f"キャリア敵({order}番目)はアイテム種別を保持", e.item_type is not None)
-    check("キャリアは4・11・18番目", carriers == [4, 11, 18])
+    check(f"キャリアは{expected_carriers}番目（敵{ENEMIES_PER_STAGE}機への比率換算）",
+          carriers == expected_carriers)
+    check("キャリアは3機おり全員が出現範囲内",
+          len(expected_carriers) == 3 and expected_carriers[-1] <= ENEMIES_PER_STAGE)
 
     # --- 5. 個体別弾数制限 ---
     from bullet import BulletManager

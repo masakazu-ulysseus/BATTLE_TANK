@@ -971,7 +971,7 @@ class EnemyManager:
             self._reset_spawn_fog()
             return
 
-        # アイテムキャリア判定（本家準拠: 4・11・18番目に出現する敵が保持）
+        # アイテムキャリア判定（出現順が ITEM_CARRIER_SPAWN_ORDER に該当する敵が保持）
         spawn_order = self.enemies_spawned + 1  # 1始まりの出現順
         carries_item = spawn_order in ITEM_CARRIER_SPAWN_ORDER
 

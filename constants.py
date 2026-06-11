@@ -49,7 +49,7 @@ UI_HEIGHT: Final[int] = 16       # 画面下部のUI表示エリア高さ
 
 # ステージ進行パラメータ
 TOTAL_STAGES: Final[int] = 35                    # ゲーム内の最大ステージ数（本家バトルシティー準拠）
-ENEMIES_PER_STAGE: Final[int] = 20              # ステージあたりの敵出現数（本家バトルシティー準拠）
+ENEMIES_PER_STAGE: Final[int] = 10              # ステージあたりの敵出現数（バランス調整値。本家は20）
 PLAYER_LIVES: Final[int] = 3                    # プレイヤーの初期ライフ数
 MAX_PLAYER_LIVES: Final[int] = 9                # プレイヤーの最大ライフ数
 
@@ -272,8 +272,12 @@ ITEM_EFFECT_DURATION: Final[dict[int, int]] = {
     ITEM_HELMET: 600    # 10秒間の無敵状態
 }
 
-# アイテムキャリア出現順（本家準拠: ステージ内で4・11・18番目に出現する敵がアイテムを保持）
-ITEM_CARRIER_SPAWN_ORDER: Final[frozenset[int]] = frozenset({4, 11, 18})
+# アイテムキャリア出現順（1始まり）
+# 本家準拠の出現位置（20機中の4・11・18番目 = 20%・55%・90%地点）を
+# ENEMIES_PER_STAGE に応じて比率換算する（敵20機なら4・11・18、敵10機なら2・6・9）
+ITEM_CARRIER_SPAWN_ORDER: Final[frozenset[int]] = frozenset(
+    max(1, round(ENEMIES_PER_STAGE * ratio)) for ratio in (0.20, 0.55, 0.90)
+)
 ITEM_CARRIER_FLASH_INTERVAL: Final[int] = 8    # キャリア敵の赤点滅周期（フレーム）
 
 # アイテム表示設定
