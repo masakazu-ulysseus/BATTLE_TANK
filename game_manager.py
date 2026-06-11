@@ -643,8 +643,8 @@ class GameManager:
         try:
             bullet = self.player.fire()
             self.bullet_manager.add_bullet(bullet)
-            # 発射音響効果の再生
-            pyxel.play(SOUND_CHANNEL_FIRE, 2)
+            # 発射音響効果の再生（実際に発射された時のみ・専用チャンネル）
+            self.game_context.sound_manager.play_fire_sound()
         except Exception as e:
             if DEBUG_MODE:
                 print(f"Bullet creation error: {e}")
@@ -954,10 +954,12 @@ class GameManager:
         """
         ゲームプレイ用音響環境を設定。
 
-        ゲームプレイ中はBGMを停止し、音響効果のみを使用します。
+        ゲームプレイ中はBGMを停止し、音響効果のみを使用します（本家準拠）。
+        ステージ開始時には開始ジングルを再生します。
         """
         try:
             self.game_context.sound_manager.stop_music()
+            self.game_context.sound_manager.play_stage_start_jingle()
         except Exception as e:
             if DEBUG_MODE:
                 print(f"Audio setup error: {e}")
@@ -1228,9 +1230,15 @@ class GameManager:
         継続処理:
         - アクティブゲームプレイ状態への復帰
         - 次ステージの初期化
+        - ステージ開始ジングルの再生
         """
         self.state = STATE_GAME
         self.init_stage()
+        try:
+            self.game_context.sound_manager.play_stage_start_jingle()
+        except Exception as e:
+            if DEBUG_MODE:
+                print(f"Stage start jingle error: {e}")
 
     def draw(self) -> None:
         """

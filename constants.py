@@ -319,11 +319,13 @@ FOG_SEQUENCE: Final[list[int]] = [1, 2, 1, 2]  # 霧アニメーション順序
 # オーディオ・サウンドシステム
 # =============================================================================
 
-# サウンドチャンネル設定
-SOUND_CHANNEL_ENGINE: Final[int] = 0        # エンジン音・移動音
-SOUND_CHANNEL_FIRE: Final[int] = 1          # 発射音・爆発音
-SOUND_CHANNEL_ITEM: Final[int] = 2          # アイテム音・効果音
-SOUND_CHANNEL_MUSIC: Final[int] = 3         # 音楽・BGM
+# サウンドチャンネル設定（役割別に分離し、同一チャンネルでの上書き競合を防ぐ）
+# 詳細は docs/sound_system.md を参照
+SOUND_CHANNEL_ENGINE: Final[int] = 0        # エンジン音（移動中）専用
+SOUND_CHANNEL_FIRE: Final[int] = 1          # 発射音専用
+SOUND_CHANNEL_EXPLOSION: Final[int] = 2     # 爆発・被弾・敵撃破・弾相殺
+SOUND_CHANNEL_ITEM: Final[int] = 3          # アイテム取得・パワーアップ・ジングル類
+SOUND_CHANNEL_MUSIC: Final[int] = 3         # 音楽・ジングル（ITEMと共用）
 
 # サウンド再生間隔
 ENGINE_SOUND_INTERVAL: Final[int] = 8       # エンジン音の再生間隔

@@ -76,13 +76,15 @@ class SoundManager:
     
     def init_sounds(self):
         """効果音を初期化"""
-        # Sound 0: Tank movement (engine sound) - short consistent buzz
+        # Sound 0: タンクエンジン音 - 可聴域の低音ワーブル（c2/d2 ≒ 65/73Hz）
+        # 2音 x speed8 = 16ティック = 60FPSで8フレーム。player側が8フレーム周期で
+        # 再トリガーすることで連続音になり、キーを離すと自然に止まる
         pyxel.sounds[0].set(
-            notes="c0c0c0",
-            tones="s",
-            volumes="555",
-            effects="nnn",
-            speed=20
+            notes="c2d2",
+            tones="ss",
+            volumes="33",
+            effects="nn",
+            speed=8
         )
         
         # Sound 1: Bullet fire - Made louder for testing
@@ -146,6 +148,15 @@ class SoundManager:
             volumes="321",
             effects="vvv",
             speed=25
+        )
+
+        # Sound 8: ステージ開始ジングル（本家バトルシティー風の上昇ファンファーレ）
+        pyxel.sounds[8].set(
+            notes="c3e3g3c4e4c4g3e3c3e3g3c4e4e4e4r",
+            tones="tttttttttttttttt",
+            volumes="5555666655556660",
+            effects="nnnnnnnnnnnnnnnn",
+            speed=12
         )
     
     def init_music(self):
@@ -242,6 +253,7 @@ class SoundManager:
     SOUND_GAME_OVER = 5
     SOUND_POWER_UP = 6
     SOUND_ENEMY_DESTROYED = 7
+    SOUND_STAGE_START = 8
     
     # Music constants
     MUSIC_GAME = 0
@@ -250,36 +262,40 @@ class SoundManager:
     MUSIC_STAGE_CLEAR = 3
     
     def play_move_sound(self):
-        """タンク移動音を再生"""
-        self.play_sound(self.SOUND_MOVE)
-    
+        """タンク移動音を再生（エンジン専用チャンネル）"""
+        self.play_sound(self.SOUND_MOVE, channel=SOUND_CHANNEL_ENGINE)
+
     def play_fire_sound(self):
-        """弾丸発射音を再生"""
-        self.play_sound(self.SOUND_FIRE)
-    
+        """弾丸発射音を再生（発射専用チャンネル）"""
+        self.play_sound(self.SOUND_FIRE, channel=SOUND_CHANNEL_FIRE)
+
     def play_explosion_sound(self):
         """Play explosion sound"""
-        self.play_sound(self.SOUND_EXPLOSION, channel=1)
-    
+        self.play_sound(self.SOUND_EXPLOSION, channel=SOUND_CHANNEL_EXPLOSION)
+
     def play_item_sound(self):
         """Play item pickup sound"""
-        self.play_sound(self.SOUND_ITEM, channel=2)
-    
+        self.play_sound(self.SOUND_ITEM, channel=SOUND_CHANNEL_ITEM)
+
     def play_stage_clear_sound(self):
-        """Play stage clear sound (on channel 3 to avoid BGM conflict)"""
-        self.play_sound(self.SOUND_STAGE_CLEAR, channel=3)
-    
+        """Play stage clear sound"""
+        self.play_sound(self.SOUND_STAGE_CLEAR, channel=SOUND_CHANNEL_ITEM)
+
+    def play_stage_start_jingle(self):
+        """ステージ開始ジングルを再生（本家準拠の開始ファンファーレ）"""
+        self.play_sound(self.SOUND_STAGE_START, channel=SOUND_CHANNEL_ITEM)
+
     def play_game_over_sound(self):
         """Play game over sound"""
-        self.play_sound(self.SOUND_GAME_OVER, channel=1)
-    
+        self.play_sound(self.SOUND_GAME_OVER, channel=SOUND_CHANNEL_EXPLOSION)
+
     def play_power_up_sound(self):
         """Play power up sound"""
-        self.play_sound(self.SOUND_POWER_UP, channel=2)
-    
+        self.play_sound(self.SOUND_POWER_UP, channel=SOUND_CHANNEL_ITEM)
+
     def play_enemy_destroyed_sound(self):
         """Play enemy destroyed sound"""
-        self.play_sound(self.SOUND_ENEMY_DESTROYED, channel=1)
+        self.play_sound(self.SOUND_ENEMY_DESTROYED, channel=SOUND_CHANNEL_EXPLOSION)
     
     def play_game_music(self):
         """Game background music disabled - using sound effects only"""
@@ -299,12 +315,12 @@ class SoundManager:
     
     def play_hit_sound(self):
         """Play player hit sound"""
-        self.play_sound(self.SOUND_EXPLOSION, channel=1)
-    
+        self.play_sound(self.SOUND_EXPLOSION, channel=SOUND_CHANNEL_EXPLOSION)
+
     def play_death_sound(self):
         """Play death sound"""
-        self.play_sound(self.SOUND_GAME_OVER, channel=1)
-    
+        self.play_sound(self.SOUND_GAME_OVER, channel=SOUND_CHANNEL_EXPLOSION)
+
     def play_pickup_sound(self):
         """Play item pickup sound"""
-        self.play_sound(self.SOUND_ITEM, channel=2)
+        self.play_sound(self.SOUND_ITEM, channel=SOUND_CHANNEL_ITEM)

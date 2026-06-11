@@ -108,9 +108,9 @@ class Player:
                 self.move_sound_timer = 0
                 
             # キーが押されている間は定期的にエンジン音を再生
-            # 連続的な「ブーーー」エンジン音効果を作成
+            # サウンド長（8フレーム相当）と同周期で再トリガーし、連続音を作成
             if self.move_sound_timer <= 0:
-                pyxel.play(0, 0)  # 機械的なエンジンブザー音を再生
+                pyxel.play(SOUND_CHANNEL_ENGINE, 0)  # エンジン音（専用チャンネル）
                 self.move_sound_timer = 8  # 連続性のため音を8フレーム間隔で配置
         else:
             # 移動キーが押されていない時はタイマーをリセット
@@ -170,11 +170,9 @@ class Player:
                 self.start_move(TILE_SIZE, 0)
                 moved = True
         
-        # 発射入力を処理（ボタン押下、長押しではない）
-        # 発射音と弾丸作成はゲームマネージャーが処理（キーボードまたはゲームパッド）
-        if pyxel.btnp(KEY_FIRE) or pyxel.btnp(GAMEPAD_FIRE):
-            pyxel.play(0, 1)  # 発射音効果を直接再生
-            # 注意: 実際の弾丸作成は game_manager.update_player() で発生
+        # 発射入力はゲームマネージャーが処理する
+        # 発射音は実際に弾丸が発射された時のみ game_manager 側で再生
+        # （弾数制限で撃てない時に音だけ鳴る不整合を防ぐ）
     
     def start_move(self, dx: int, dy: int) -> None:
         """

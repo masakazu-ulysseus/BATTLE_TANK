@@ -50,6 +50,13 @@ def main() -> None:
     gm = GameManager()
     check("GameManager 初期化", gm.state == STATE_TITLE)
 
+    # --- サウンドシステム（docs/sound_system.md 準拠） ---
+    check("ステージ開始ジングル(sound 8)が定義されている",
+          len(pyxel.sounds[8].notes) > 0)
+    check("SEチャンネルが役割別に分離されている",
+          len({SOUND_CHANNEL_ENGINE, SOUND_CHANNEL_FIRE,
+               SOUND_CHANNEL_EXPLOSION, SOUND_CHANNEL_ITEM}) == 4)
+
     # --- 2. ゲームループ600フレーム ---
     gm.start_new_game()
     for _ in range(600):

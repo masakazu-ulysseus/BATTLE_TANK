@@ -230,7 +230,7 @@ class Bullet:
 
         # 遅延タイル破壊のスケジューリング（爆発アニメーション完了後）
         if map_manager.schedule_tile_destruction(grid_x, grid_y, DELAYED_DESTRUCTION_FRAMES):
-            pyxel.play(SOUND_CHANNEL_FIRE, 2)  # 爆発音響効果
+            pyxel.play(SOUND_CHANNEL_EXPLOSION, 2)  # 爆発音響効果
 
         self.active = False
 
@@ -288,7 +288,7 @@ class Bullet:
             if DEBUG_MODE:
                 print(f"Warning: Could not trigger game over: {e}")
 
-        pyxel.play(SOUND_CHANNEL_FIRE, 2)  # 爆発音響効果
+        pyxel.play(SOUND_CHANNEL_EXPLOSION, 2)  # 爆発音響効果
         self.active = False
 
     def _handle_steel_collision(self, map_manager: 'MapManager') -> None:
@@ -578,7 +578,7 @@ class BulletManager:
         bullet2.active = False
 
         # 爆発音響効果の再生
-        pyxel.play(SOUND_CHANNEL_FIRE, 2)
+        pyxel.play(SOUND_CHANNEL_EXPLOSION, 2)
 
     def clear_bullets_by_owner(self, owner_type: TankType) -> None:
         """
