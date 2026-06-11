@@ -102,14 +102,21 @@ class TankBattle:
             SystemExit: リソース読み込みに失敗した場合
         """
         try:
+            # 再生中の音声データを上書きするとネイティブ層がクラッシュするため、
+            # 読み込み・再初期化の前に全音声を停止する（docs/sound_system.md 参照）
+            pyxel.stop()
+
             # メインリソースファイルを読み込み
             # このファイルにはタンク、アイテム、エフェクトのスプライトが含まれる
-            pyxel.load(SPRITE_FILE)
+            # 音声は全てコードで定義するため、音声データは除外して読み込む
+            pyxel.load(SPRITE_FILE, exclude_sounds=True, exclude_musics=True)
             print(f"リソースファイル '{SPRITE_FILE}' の読み込みに成功しました")
 
-            # リソース読み込み後にサウンドシステムを再初期化
-            # pyxel.load()はサウンドデータを上書きする可能性があるため
+            # サウンドシステムを再初期化（全音声停止中なので安全）
             self._init_sound_system()
+
+            # 音声の初期化が完了したのでタイトルBGMを開始
+            self.game_manager.game_context.sound_manager.play_title_music()
 
         except FileNotFoundError:
             # リソースファイルが見つからない場合
