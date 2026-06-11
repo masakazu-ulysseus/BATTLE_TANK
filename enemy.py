@@ -67,6 +67,11 @@ class Enemy:
         item_type (Optional[int]): 保持しているアイテムタイプ
     """
 
+    # 個体識別ID採番カウンター（クラス変数）
+    # id(self) はオブジェクト破棄後にメモリ再利用で重複し得るため、
+    # 単調増加のユニークIDを使用する（弾丸の owner_id 誤判定防止）
+    _next_id: int = 0
+
     def __init__(self, x: int, y: int, enemy_type: int,
                  carries_item: bool = False) -> None:
         """
@@ -78,6 +83,10 @@ class Enemy:
             enemy_type (int): 敵タンクタイプ定数
             carries_item (bool): アイテムキャリアかどうか（赤点滅し、撃破時にアイテムをドロップ）
         """
+        # 個体識別用ユニークIDの採番
+        Enemy._next_id += 1
+        self.enemy_id: int = Enemy._next_id
+
         # 基本位置と状態
         self.x: float = float(x)
         self.y: float = float(y)
@@ -444,7 +453,7 @@ class Enemy:
         # 既存弾丸数制限チェック（個体単位: 各敵は同時に1発まで）
         own_bullets = [
             b for b in bullet_manager.bullets
-            if b.active and b.owner_id == id(self)
+            if b.active and b.owner_id == self.enemy_id
         ]
         if len(own_bullets) >= 1:
             return
@@ -596,7 +605,7 @@ class Enemy:
         return Bullet(
             bullet_x, bullet_y, self.direction,
             bullet_speed, self.enemy_type,
-            owner_id=id(self)
+            owner_id=self.enemy_id
         )
 
     def take_damage(self) -> bool:

@@ -122,7 +122,8 @@ def main() -> None:
     e2._execute_fire(bm)
     check("同タイプの敵2機が同時に発射できる", bm.get_bullet_count() == 2)
     owner_ids = {b.owner_id for b in bm.bullets}
-    check("弾丸に個体識別子が設定される", owner_ids == {id(e1), id(e2)})
+    check("弾丸に個体識別子が設定される", owner_ids == {e1.enemy_id, e2.enemy_id})
+    check("個体識別子はユニークに採番される", e1.enemy_id != e2.enemy_id)
 
     # --- 6. 氷タイルの滑り ---
     gm.map_manager.load_stage(1)
@@ -171,9 +172,14 @@ def main() -> None:
     # --- 8. ハイスコア永続化 ---
     gm.score = 99999
     gm.high_score = 0
+    gm.new_high_score_achieved = False
     gm._update_high_score()
     check("ハイスコアがファイルに保存される", os.path.exists(HIGH_SCORE_FILE))
     check("保存したハイスコアを読み込める", gm._load_high_score() == 99999)
+    check("記録更新時に新記録フラグが立つ", gm.new_high_score_achieved)
+    gm.new_high_score_achieved = False
+    gm._update_high_score()  # スコアはハイスコアと同点
+    check("同点では新記録フラグが立たない", not gm.new_high_score_achieved)
     os.remove(HIGH_SCORE_FILE)  # テスト後の清掃
 
     # --- 9. ポーズ ---

@@ -177,6 +177,9 @@ class GameManager:
         self.last_stage_bonus: int = 0
         self.last_life_bonus: int = 0
 
+        # 新記録達成フラグ（0点や同点での「NEW HIGH SCORE!」誤表示を防ぐ）
+        self.new_high_score_achieved: bool = False
+
     def _load_high_score(self) -> int:
         """
         ハイスコアをファイルから読み込む。
@@ -932,6 +935,7 @@ class GameManager:
             self.score = 0
             self.current_stage = 1
             self.paused = False
+            self.new_high_score_achieved = False
 
             # プレイヤー状態の初期化
             self._reset_player_state()
@@ -1006,9 +1010,13 @@ class GameManager:
     def _update_high_score(self) -> None:
         """
         新記録達成時にハイスコアを更新し、ファイルに永続化。
+
+        実際に記録を上回った場合のみ達成フラグを立てる
+        （0点や同点での「NEW HIGH SCORE!」誤表示を防ぐ）。
         """
         if self.score > self.high_score:
             self.high_score = self.score
+            self.new_high_score_achieved = True
             self._save_high_score()
 
     def _play_game_over_audio(self) -> None:
@@ -1303,8 +1311,8 @@ class GameManager:
             score_text = TEXT_FINAL_SCORE.format(self.score)
             self._draw_centered_text(score_text, 136, COLOR_WHITE)
 
-            # 新記録達成の祝福（該当時のみ）
-            if self.score >= self.high_score:
+            # 新記録達成の祝福（実際に記録を更新した時のみ）
+            if self.new_high_score_achieved:
                 self._draw_centered_text(TEXT_NEW_HIGH_SCORE, 152, COLOR_YELLOW)
 
             # 点滅する操作案内
@@ -1664,8 +1672,8 @@ class GameManager:
         score_text = TEXT_FINAL_SCORE.format(self.score)
         self._draw_centered_text(score_text, overlay_y + 32, COLOR_WHITE)
 
-        # 新ハイスコア祝福（達成時のみ）
-        if self.score >= self.high_score:
+        # 新ハイスコア祝福（実際に記録を更新した時のみ）
+        if self.new_high_score_achieved:
             self._draw_centered_text(TEXT_NEW_HIGH_SCORE, overlay_y + 48, COLOR_YELLOW)
 
     def draw_stage_clear(self) -> None:
