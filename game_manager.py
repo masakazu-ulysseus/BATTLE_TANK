@@ -518,6 +518,9 @@ class GameManager:
         # ポーズ切り替え入力のチェック
         if pyxel.btnp(KEY_PAUSE) or pyxel.btnp(GAMEPAD_START):
             self.paused = not self.paused
+            if self.paused:
+                # ループ中のエンジン音を停止（ポーズ中の鳴りっぱなし防止）
+                pyxel.stop(SOUND_CHANNEL_ENGINE)
 
         if self.paused:
             return True
@@ -1043,6 +1046,9 @@ class GameManager:
         try:
             # ステージクリア祝福状態への遷移
             self.state = STATE_STAGE_CLEAR
+
+            # ループ中のエンジン音を停止（集計画面への持ち越し防止）
+            pyxel.stop(SOUND_CHANNEL_ENGINE)
 
             # ステージクリア祝福タイマーの設定
             self.stage_clear_timer = STAGE_CLEAR_TIMER

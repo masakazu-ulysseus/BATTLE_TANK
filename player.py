@@ -41,7 +41,6 @@ class Player:
         is_moving (bool): タンクが現在スムーズ移動中かどうか
         target_x (int): スムーズ移動の目的地X座標
         target_y (int): スムーズ移動の目的地Y座標
-        move_sound_timer (int): エンジン音の間隔用タイマー
     """
     def __init__(self, x: int, y: int) -> None:
         """
@@ -67,9 +66,6 @@ class Player:
         self.target_x: int = x  # 現在移動の目的地X
         self.target_y: int = y  # 現在移動の目的地Y
         
-        # エンジン音システム（初回使用時に初期化）
-        self.move_sound_timer: int = 0  # エンジン音の間隔用タイマー
-        
     def update(self, map_manager: 'MapManager') -> None:
         """
         各フレームでプレイヤータンクの状態、入力、移動を更新。
@@ -87,36 +83,27 @@ class Player:
         # 無敵中はプレイヤーが点滅し、ダメージを受けない
         if self.invincible_timer > 0:
             self.invincible_timer -= 1
-        
-        # エンジン音タイマーを更新（毎フレーム減少）
-        if hasattr(self, 'move_sound_timer') and self.move_sound_timer > 0:
-            self.move_sound_timer -= 1
-        
+
         # 衝突による位置ずれを防ぐためグリッド整列を強制
         self.force_grid_alignment()
-        
-        # 入力状態に基づいた現実的なタンクエンジン音処理
-        # スムーズ移動中でも、移動キーまたはゲームパッドが押されている間はエンジン音が鳴る
+
+        # 入力状態に基づいたタンクエンジン音処理
+        # 重要: play() の連打は再生コマンドの蓄積によりオーディオエンジンを
+        # 停止させるため（docs/sound_system.md 参照）、ループ再生を1回だけ
+        # 開始し、キーを離したら停止する方式とする
         key_pressed = (pyxel.btn(KEY_UP) or pyxel.btn(KEY_DOWN) or
                       pyxel.btn(KEY_LEFT) or pyxel.btn(KEY_RIGHT) or
                       pyxel.btn(GAMEPAD_UP) or pyxel.btn(GAMEPAD_DOWN) or
                       pyxel.btn(GAMEPAD_LEFT) or pyxel.btn(GAMEPAD_RIGHT))
-        
+
         if key_pressed:
-            # 初回実行時にサウンドタイマーを初期化
-            if not hasattr(self, 'move_sound_timer'):
-                self.move_sound_timer = 0
-                
-            # キーが押されている間は定期的にエンジン音を再生
-            # サウンド長（8フレーム相当）と同周期で再トリガーし、連続音を作成
-            if self.move_sound_timer <= 0:
-                pyxel.play(SOUND_CHANNEL_ENGINE, 0)  # エンジン音（専用チャンネル）
-                self.move_sound_timer = 8  # 連続性のため音を8フレーム間隔で配置
+            # チャンネルが空いている時のみループ再生を開始（連打防止）
+            if pyxel.play_pos(SOUND_CHANNEL_ENGINE) is None:
+                pyxel.play(SOUND_CHANNEL_ENGINE, 0, loop=True)
         else:
-            # 移動キーが押されていない時はタイマーをリセット
-            # プレイヤーが入力を停止した時にエンジン音を停止
-            if hasattr(self, 'move_sound_timer'):
-                self.move_sound_timer = 0
+            # キーを離したらエンジン音を停止（再生中の場合のみ）
+            if pyxel.play_pos(SOUND_CHANNEL_ENGINE) is not None:
+                pyxel.stop(SOUND_CHANNEL_ENGINE)
         
         # スムーズ移動システムを処理
         # 現在グリッド位置間を移動中の場合、スムーズ移動を継続
